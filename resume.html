@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>刘耀阳 · 简历（AI 应用工程 / 2027 届）</title>
+<meta name="description" content="刘耀阳的简历：AI 应用工程方向，RAG 检索、工具链与自动化。">
+<style>
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    color: #23282e; font-size: 9.6pt; line-height: 1.62;
+  }
+  .page {
+    width: 210mm; height: 297mm; padding: 14mm 15mm 12mm 15mm;
+    position: relative; overflow: hidden; background: #fff;
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* 顶部色带 */
+  .page::before {
+    content: ""; position: absolute; left: 0; top: 0; width: 210mm; height: 4.5mm;
+    background: linear-gradient(90deg, #1d3557 0%, #2a6f97 55%, #61a5c2 100%);
+  }
+
+  /* ============ 头部 ============ */
+  .hero { display: flex; justify-content: space-between; align-items: flex-start; padding-top: 5mm; }
+  h1 { font-size: 27pt; letter-spacing: 3pt; color: #12233b; font-weight: 700; line-height: 1.1; }
+  .role { font-size: 11pt; color: #2a6f97; font-weight: 700; letter-spacing: .6pt; margin-top: 2.2mm; }
+  .meta { font-size: 8.6pt; color: #5a6672; margin-top: 1.2mm; }
+  .meta b { color: #23282e; font-weight: 600; }
+
+  .qrwrap { text-align: center; padding-top: 1mm; flex: 0 0 auto; }
+  .qrbox { width: 30mm; height: 30mm; display: block; }
+  .qrlabel { font-size: 6.6pt; color: #7b8794; margin-top: 1.4mm; letter-spacing: .2pt; line-height: 1.45; }
+  .qrlabel b { color: #2a6f97; font-weight: 600; }
+
+  /* ============ 定位句 ============ */
+  .tagline {
+    margin: 5mm 0 4mm 0; padding: 3mm 4mm;
+    background: #f2f6f9; border-left: 2.2mm solid #2a6f97;
+    font-size: 10pt; color: #16283d; line-height: 1.62;
+  }
+
+  /* ============ 两栏 ============ */
+  .grid { display: flex; gap: 7mm; }
+  main { width: 63%; }
+  main li { margin-bottom: 3.9mm; }
+  aside { width: 37%; border-left: .5pt solid #dde4ea; padding-left: 6mm; }
+  aside h2 { margin-bottom: 2.4mm; }
+  aside h2.sp { margin-top: 3mm; }
+  aside .item { margin-bottom: 2.2mm; }
+  aside .capitem { padding: 1.6mm 0; }
+
+  h2 {
+    font-size: 10.5pt; color: #12233b; letter-spacing: .8pt;
+    padding-bottom: 1.4mm; margin-bottom: 3mm; border-bottom: 1.2pt solid #1d3557;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  h2 .en { font-size: 7.2pt; color: #8b98a6; letter-spacing: 1.2pt; font-weight: 400; }
+  h2.sp { margin-top: 5mm; }
+  h3 { font-size: 9.8pt; color: #1d3557; margin-top: 4mm; margin-bottom: 1mm; }
+  h3:first-of-type { margin-top: 0; }
+  .when { font-size: 7.6pt; color: #8494a3; font-weight: 400; letter-spacing: .3pt; display: block; margin-top: .8mm; margin-bottom: 1.6mm; }
+
+  ul { list-style: none; }
+  li { position: relative; padding-left: 3.6mm; margin-bottom: 2.6mm; }
+  li::before {
+    content: ""; position: absolute; left: 0; top: 1.85mm;
+    width: 1.4mm; height: 1.4mm; background: #61a5c2; border-radius: 50%;
+  }
+  b, strong { color: #12233b; font-weight: 600; }
+
+  /* ============ 能力表（上下堆叠，避免窄列断行） ============ */
+  .cap { width: 100%; font-size: 8.9pt; }
+  .capitem { padding: 2.1mm 0; border-bottom: .4pt solid #e6ebf0; }
+  .capitem:last-child { border-bottom: none; }
+  .capitem .k { color: #2a6f97; font-weight: 700; font-size: 8.4pt; letter-spacing: .4pt; margin-bottom: .7mm; }
+  .capitem .v { color: #3c4753; line-height: 1.5; }
+
+  /* ============ 其他项目 ============ */
+  .item { margin-bottom: 3.4mm; }
+  .item .t { font-size: 9pt; font-weight: 700; color: #1d3557; }
+  .item .d { font-size: 8.6pt; color: #55616d; margin-top: .7mm; line-height: 1.5; }
+
+  /* ============ 案例 ============ */
+  .case { margin-bottom: 7mm; }
+  .case-bar { display: flex; align-items: baseline; gap: 3mm; margin-bottom: 2.5mm; }
+  .case-no {
+    font-size: 7.4pt; font-weight: 700; color: #fff; background: #1d3557;
+    padding: .6mm 2mm; border-radius: 1mm; letter-spacing: .6pt;
+  }
+  .case-t { font-size: 10.4pt; font-weight: 700; color: #12233b; }
+  .step { font-size: 8.4pt; color: #2a6f97; font-weight: 700; letter-spacing: .5pt; margin: 2.2mm 0 .8mm 0; }
+  table.exp { border-collapse: collapse; width: 100%; font-size: 8.4pt; margin: 2mm 0 2.5mm 0; }
+  table.exp th {
+    background: #1d3557; color: #fff; font-weight: 600; font-size: 8pt;
+    padding: 1.6mm 2mm; text-align: left;
+  }
+  table.exp td { padding: 1.5mm 2mm; border-bottom: .4pt solid #e6ebf0; }
+  table.exp tr.best td { background: #f0f7f2; font-weight: 700; }
+  table.exp td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .concl {
+    background: #f2f6f9; border-left: 2mm solid #2a6f97; padding: 2.4mm 3mm;
+    font-size: 8.8pt; margin-top: 2mm;
+  }
+
+  .diagram { margin: 3mm 0 4mm 0; }
+  .footnote {
+    position: absolute; left: 15mm; right: 15mm; bottom: 9mm;
+    border-top: .5pt solid #dde4ea; padding-top: 2.5mm;
+    font-size: 7.8pt; color: #8494a3; display: flex; justify-content: space-between; align-items: center;
+  }
+  .footnote .lk { color: #2a6f97; font-weight: 600; }
+
+  /* ============ 在线浏览适配（不影响打印） ============ */
+  @media screen {
+    body { background: #e9eef3; padding: 0; }
+    .page {
+      width: 100%; max-width: 210mm; height: auto; min-height: 0;
+      overflow: visible; margin: 0 auto; box-shadow: 0 2px 18px rgba(18,35,59,.14);
+    }
+  }
+  /* 注意：@media 不能嵌套在 @media 里，以下响应式必须写在顶层 */
+  @media screen and (max-width: 720px) {
+    .page { padding: 12mm 6mm 10mm 6mm; }
+    .grid { display: block; }
+    main { width: 100%; }
+    aside {
+      width: 100%; border-left: none; border-top: .5pt solid #dde4ea;
+      padding-left: 0; padding-top: 5mm; margin-top: 4mm;
+    }
+    .hero { flex-wrap: wrap; }
+    h1 { font-size: 23pt; }
+    .tagline { font-size: 9.4pt; }
+    .qrwrap { margin-left: 0; margin-top: 6mm; }
+  }
+  .sitebar {
+    background: #12233b; color: #fff; font-size: 13px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px;
+  }
+  .sitebar a { color: #cfe3ef; text-decoration: none; border: none; white-space: nowrap; }
+  .sitebar a:hover { color: #fff; }
+  .sitebar .l a { margin-left: 18px; }
+  @media (max-width: 620px) {
+    .sitebar { display: block; padding: 8px 12px; font-size: 12.5px; line-height: 1.9; }
+    .sitebar .l { display: block; }
+    .sitebar .l a { margin: 0 16px 0 0; }
+  }
+  .sitefoot {
+    max-width: 210mm; margin: 0 auto; padding: 18px 6mm 40px;
+    font-size: 12.5px; color: #7b8794; text-align: center;
+  }
+  .sitefoot a { color: #2a6f97; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="sitebar">
+  <span><a href="index.html">刘耀阳 · 工程笔记</a></span>
+  <span class="l"><a href="index.html">首页</a><a href="notes.html">方法论</a><a href="resume.html">简历</a></span>
+</div><div class="page">
+  <div class="hero">
+    <div>
+      <h1>刘耀阳</h1>
+      <div class="role">AI 应用工程　·　RAG / 工具链 / 自动化　·　2027 届</div>
+      <div class="meta">男 · 21 · 河南新乡　｜　15938051557　｜　337186519@qq.com</div>
+      <div class="meta">河南科技学院 · 物联网工程（本科）· 2023.09 – 2027.06　｜　求职方向：AI 应用开发 / AI 工程</div>
+    </div>
+    <div class="qrwrap">
+      <img class="qrbox" src="qr.svg" alt="扫码打开方法论主页">
+      <div class="qrlabel">扫码看方法论<br><b>tlsxty.github.io/notes</b></div>
+    </div>
+  </div>
+
+  <div class="tagline">我做的是让 AI 在受限硬件上稳定交付结果的那一层：<b>检索、归因、留痕、回滚</b>。</div>
+
+  <div class="grid">
+    <main>
+      <section>
+        <h2>核心项目 A<span class="en">KNOWLEDGE BASE &amp; RETRIEVAL</span></h2>
+        <h3>镜我计划 · 本地知识库与语义检索系统</h3>
+        <span class="when">2026.09 – 至今（约 10 周）　·　独立设计与实现</span>
+        <p style="color:#55616d;margin-bottom:2mm;">一个人维护的技术知识库，以及它配套的检索系统。目标不是"记笔记"，是<b>让每一次踩坑的结论只被推导一遍</b>。</p>
+        <ul>
+          <li><b>规模</b>　43 篇结构化知识笔记 / 60 万字节 / 850 个语义块，覆盖跨版本 API 迁移、故障归因、工具链建设四个领域</li>
+          <li><b>检索</b>　本地 BAAI/bge-small-zh-v1.5 embedding + SQLite 向量库，<b>单次混合检索 422 ms，API 费用 0 元</b>——刻意不接云端，因为"查自己的笔记"不值得按次付费</li>
+          <li><b>方法层</b>　单独抽出 3 篇<b>只写方法、不写结论</b>的排障方法论（黑盒行为归因、参考实现契约提取、契约八维度清单），使结论可复用而非单次经验</li>
+          <li><b>工程约束</b>　自建"已验证结论 / 未验证推测"分流规则：只有编译通过、实机跑通、有日志或哈希为证的条目才允许入库</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="sp">核心项目 B<span class="en">AI MEDIA PIPELINE</span></h2>
+        <h3>AI 素材与视频生产管线</h3>
+        <span class="when">2026.09 – 至今（约 8 周）　·　独立设计与实现　·　无独立显卡</span>
+        <p style="color:#55616d;margin-bottom:2mm;">在一台<b>只有 Intel 核显、15.7 GB 内存</b>的机器上，把"生成素材 → 合成视频"做成了可复用的本地管线。</p>
+        <ul>
+          <li><b>产出</b>　8 分 25 秒带自动配音与字幕的成片（源素材 15 分钟 4.28 GB），<b>45 条字幕全自动生成</b>；同期产出 <b>286 张</b>游戏内可用贴图，封装为 5 套资源包</li>
+          <li><b>工程规模</b>　76 个 Python 脚本 / 9,141 行，覆盖切片、转场、字幕烧录、程序化贴图、抠图、像素化、批量出图</li>
+          <li><b>成本工程</b>　模型量化后 CPU 推理，768px 出图 340–400 s/张，<b>全链路 API 支出 0 元</b>；离线中译英模型（312 MB）替代在线翻译，规避网络与计费依赖</li>
+          <li><b>关键归因</b>　出图质量问题的根因不是算力，是提示词——步数 8→20（669 s → 1,019 s）效果无差别，改词后 12 步（477 s）反而最好</li>
+        </ul>
+      </section>
+    </main>
+
+    <aside>
+      <h2>工程能力<span class="en">STACK</span></h2>
+      <div class="cap">
+        <div class="capitem"><div class="k">AI 工程</div><div class="v">本地 embedding 检索；Stable Diffusion 系列（SD1.5 / SDXL / SSD-1B）CPU 部署与调优；LoRA 集成、img2img 细化；离线翻译模型</div></div>
+        <div class="capitem"><div class="k">工程方法</div><div class="v">可复现变更留痕（SHA256 三份备份）、契约提取、黑盒行为归因、先建模拟器后写实现</div></div>
+        <div class="capitem"><div class="k">语言工具</div><div class="v">Python（主力）、Java、SQL；ffmpeg 全链路；Git / Markdown / SQLite</div></div>
+      </div>
+
+      <h2 class="sp">其他项目<span class="en">OTHERS</span></h2>
+
+      <div class="item">
+        <div class="t">回合制战斗平衡模拟器</div>
+        <div class="d">2026.10　先写蒙特卡洛模拟器再写游戏逻辑，<b>12,800 局</b>验证数值，4 项验收指标全部通过（镜像局胜率偏差 ≤1.2%、中位 9 回合、20 回合兜底率 0%）</div>
+      </div>
+      <div class="item">
+        <div class="t">版本与发布工程</div>
+        <div class="d">2026.09 – 至今　<b>5 个自有仓库 / 254 次提交 / 3 个公开仓库（MIT）/ 47 天</b>；双仓库分离开发存档与发布包，发布前 <b>git ls-remote</b> 校验 tag 指向、HEAD 校验附件大小与版本号一致性；提交、打 tag、推包交给 agent 执行，<b>人只保留决策与验收</b></div>
+      </div>
+      <div class="item">
+        <div class="t">Java 实习项目 ×3</div>
+        <div class="d">小组 2–6 人　职员管理系统（分级权限）、能源统计网站（前后端联调与接口校验加固）、图书馆空位识别（图像模型接入）</div>
+      </div>
+
+      <h2 class="sp">教育<span class="en">EDUCATION</span></h2>
+      <div class="item">
+        <div class="t">河南科技学院　物联网工程（本科）</div>
+        <div class="d">2023.09 – 2027.06　核心课程：Java、Python、物联网技术、人工智能基础</div>
+      </div>
+    </aside>
+  </div>
+</div>
+<div class="sitefoot">
+  本站只公开方法论与自建工具；第三方项目细节不在公开范围。<br>
+  <a href="index.html">返回方法论首页</a>　·　337186519@qq.com
+</div>
+</body>
+</html>
