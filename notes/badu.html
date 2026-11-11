@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>参考契约八维度清单 · 刘耀阳</title>
+<meta name="description" content="刘耀阳 · 排障方法论：把故障定位、参考实现契约提取沉淀成可复用的方法">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="bar"><div class="wrap"><a class="brand" href="../index.html" style="border:none">刘耀阳 · 工程笔记</a><nav><a href="../index.html">首页</a><a href="../notes.html">方法论</a></nav></div></header>
+<article><div class="wrap"><h1>参考契约八维度清单</h1><div class="meta">可打勾的八维度表：把「找重点」换成「逐条回答」　·　方法论 · 公开版</div><blockquote>
+<p><strong>用途</strong>：给一个参考实现 + 一个要写的新实现，逐维度填「参考怎么做的 / 我打算怎么做 / 是否故意不同」。
+<strong>为什么需要固定清单</strong>：自由发挥的「找重点」有个致命缺陷——你不知道你不知道什么。没注意到的维度，清单里根本不会出现，于是漏得无声无息。固定维度表把「主观找重点」换成「逐条回答」，漏了就是一行空白，看得见。</p>
+</blockquote>
+<p>配套理论见 <a href="qiyue.html">参考实现的契约提取</a>（复位者判据、契约表、性质测试）。本文只是<strong>可打勾的版本</strong>。</p>
+<h2>一、使用方式</h2>
+<ol>
+<li><strong>动手写第一行实现代码之前</strong>，把下面八行抄成表，逐行填。</li>
+<li>任何一行填不出来 → 说明还没读懂参考实现，<strong>去读，不要开始写</strong>。</li>
+<li>填完把表存到 <code>docs/参考契约/&lt;案例名&gt;.md</code>，随代码一起留下。只活在对话里的差异清单，下一个人（或下一个 agent）会从零重来。</li>
+<li>第 3 列填「有意」或「未察觉」。<strong>不许填「无差异」</strong>——填了说明根本没找。</li>
+</ol>
+<h2>二、八维度</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">#</th>
+<th style="text-align: left;">维度</th>
+<th style="text-align: left;">问法</th>
+<th style="text-align: left;">为什么危险</th>
+<th style="text-align: left;">反例（本机真实）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">1</td>
+<td style="text-align: left;"><strong>求值时机</strong></td>
+<td style="text-align: left;">这个值在什么时候算出来？读时 / 写时 / 构造时 / 定时</td>
+<td style="text-align: left;">同一份数据，求值位置不同 → 自愈能力完全不同</td>
+<td style="text-align: left;">参考 <code>isFrozen()</code> 读时比时间戳（自愈）；自己实现在写时算好并靠 tick 复位（不自愈）</td>
+</tr>
+<tr>
+<td style="text-align: left;">2</td>
+<td style="text-align: left;"><strong>驱动者</strong></td>
+<td style="text-align: left;">谁推动状态前进？<strong>把这个驱动整个删掉，性质还成立吗</strong></td>
+<td style="text-align: left;">驱动一停就永久卡死，且现场看不出异常</td>
+<td style="text-align: left;"><code>tickServer</code> 不跑 ⇒ WAITING 永不为空 ⇒ <code>blocksWorldTick()</code> 恒 true ⇒ 世界永久冻结</td>
+</tr>
+<tr>
+<td style="text-align: left;">3</td>
+<td style="text-align: left;"><strong>生命周期终点</strong></td>
+<td style="text-align: left;">谁负责复位 / 清理 / 释放？没人负责就是泄漏</td>
+<td style="text-align: left;">泄漏型 bug 潜伏期长，发作时与起因隔了很远</td>
+<td style="text-align: left;">到期只靠驱动复位，驱动不在就没人复位</td>
+</tr>
+<tr>
+<td style="text-align: left;">4</td>
+<td style="text-align: left;"><strong>判据位置</strong></td>
+<td style="text-align: left;">准入或拒绝的判断读的是哪个字段 / 哪个方法</td>
+<td style="text-align: left;">判据读错字段 → 放行了本该拦的，或拦了本该放的</td>
+<td style="text-align: left;">「放行」与「生效」是两件事，见 <code>1.18.2 Forge API 事实速查</code> §九</td>
+</tr>
+<tr>
+<td style="text-align: left;">5</td>
+<td style="text-align: left;"><strong>失败方向</strong></td>
+<td style="text-align: left;">出错时是保守（拒绝）还是激进（放行）？两处必须一致</td>
+<td style="text-align: left;">一处保守一处激进 → 出错的边界上行为不可预测</td>
+<td style="text-align: left;">校验失败时静默降级为「允许」</td>
+</tr>
+<tr>
+<td style="text-align: left;">6</td>
+<td style="text-align: left;"><strong>作用域</strong></td>
+<td style="text-align: left;">全局 / 每玩家 / 每世界 / 每实例；会不会跨作用域泄漏</td>
+<td style="text-align: left;">静态字段装每玩家状态，多人时互相污染</td>
+<td style="text-align: left;">—</td>
+</tr>
+<tr>
+<td style="text-align: left;">7</td>
+<td style="text-align: left;"><strong>顺序与重入</strong></td>
+<td style="text-align: left;">重复调用是否幂等？并发或递归调用是否安全</td>
+<td style="text-align: left;">非幂等的初始化/累加在重试或重入时翻倍</td>
+<td style="text-align: left;">—</td>
+</tr>
+<tr>
+<td style="text-align: left;">8</td>
+<td style="text-align: left;"><strong>默认值语义</strong></td>
+<td style="text-align: left;"><code>null</code> / <code>0</code> / 空集合 / 缺省字段分别意味着「没有」还是「不限」</td>
+<td style="text-align: left;">把「没有」当「不限」→ 无条件放行</td>
+<td style="text-align: left;">配置缺省即全开</td>
+</tr>
+</tbody>
+</table>
+<h3>填表示例（第 1、2 行是本机踩过的）</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">#</th>
+<th style="text-align: left;">维度</th>
+<th style="text-align: left;">参考实现</th>
+<th style="text-align: left;">我的实现</th>
+<th style="text-align: left;">有意差异？</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">1</td>
+<td style="text-align: left;">求值时机</td>
+<td style="text-align: left;">读时按 <code>Util.getMillis() &lt; freezeUntilMillis</code> 算</td>
+<td style="text-align: left;">写时算好 deadline，读时查 map</td>
+<td style="text-align: left;">未察觉（<strong>错</strong>）</td>
+</tr>
+<tr>
+<td style="text-align: left;">2</td>
+<td style="text-align: left;">驱动者</td>
+<td style="text-align: left;">无驱动者，天然自愈</td>
+<td style="text-align: left;"><code>tickServer</code> 每 tick 清理</td>
+<td style="text-align: left;">未察觉（<strong>错</strong>）</td>
+</tr>
+</tbody>
+</table>
+<h2>三、反向验证（唯一能机械检测「漏抄」的办法）</h2>
+<p>正向测试测的是「我的实现对不对」，测不出「我有没有漏掉参考实现的性质」。</p>
+<p>做法：<strong>把参考实现故意改坏，看你的测试红不红</strong>。</p>
+<pre><code>把参考实现的「读时求值」改成「写时求值 + 靠 tick 复位」
+  → 如果你的测试仍然全绿，说明测试根本没覆盖到那条性质，你确实漏了
+  → 如果变红，说明这条性质被你的测试抓住了
+</code></pre>
+<p>判据：<strong>测试必须在「参考实现被改坏」时失败，否则它不是契约测试，只是实现快照。</strong></p>
+<h2>四、维护规则</h2>
+<ul>
+<li><strong>踩到新坑就往八维度表里加一行</strong>，不要追求一次写完备。成本随经验摊薄：一次性建表，之后每次失败只付一行。</li>
+<li>某个维度在本项目反复出问题 → 在「为什么危险」里补一条本机反例，让人一看就知道疼在哪。</li>
+<li>维度表只放<strong>跨语言跨领域恒真</strong>的问法；项目专属细节放项目自己的 <code>docs/已验证结论.md</code>，这里只留一行指针。</li>
+<li>这张表<strong>不保证 100% 覆盖</strong>，只覆盖已知的语义维度。发现它漏了，就说明出现了新类型的坑，加行。</li>
+</ul>
+<h2>五、与其它文档的分工</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">文档</th>
+<th style="text-align: left;">管什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">本文</td>
+<td style="text-align: left;"><strong>可打勾的检查表</strong>：八个维度，逐行回答</td>
+</tr>
+<tr>
+<td style="text-align: left;"><a href="qiyue.html">参考实现的契约提取</a></td>
+<td style="text-align: left;"><strong>为什么</strong>要这么做：复位者三类、契约表、性质测试先行、两种参考源陷阱、反模式</td>
+</tr>
+<tr>
+<td style="text-align: left;"><a href="heihe.html">黑盒行为的归因与验证</a></td>
+<td style="text-align: left;">已经漏了之后<strong>怎么定位</strong>：可重放样本、分维排除、二分、判别实验</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>C:\Users\examp\.dsh\AGENTS.md</code> §六</td>
+<td style="text-align: left;">只留触发条件 + 一句硬规则 + 指向本文</td>
+</tr>
+</tbody>
+</table><div class="backlink"><a href="../notes.html">← 返回方法论列表</a></div></div></article>
+<footer><div class="wrap">本站只公开方法论与自建工具；第三方项目细节不在公开范围。<br>刘耀阳 · 337186519@qq.com</div></footer>
+</body>
+</html>

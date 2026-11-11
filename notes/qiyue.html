@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>参考实现的契约提取 · 刘耀阳</title>
+<meta name="description" content="刘耀阳 · 排障方法论：把故障定位、参考实现契约提取沉淀成可复用的方法">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="bar"><div class="wrap"><a class="brand" href="../index.html" style="border:none">刘耀阳 · 工程笔记</a><nav><a href="../index.html">首页</a><a href="../notes.html">方法论</a></nav></div></header>
+<article><div class="wrap"><h1>参考实现的契约提取</h1><div class="meta">动手之前怎么不漏：复位者判据与性质测试　·　方法论 · 公开版</div><blockquote>
+<p>一句话：<strong>参考代码的价值不在「长什么样」，在「它靠什么保证了什么」。</strong>
+抄结构会漏掉求值位置，抄契约才不会。</p>
+</blockquote>
+<p>本文与 <a href="heihe.html">黑盒行为的归因与验证</a> 是同一族方法的两个方向：那篇讲<strong>出事之后</strong>怎么定位，这篇讲<strong>动手之前</strong>怎么不漏。</p>
+<h2>零、问题形态：结构相同，语义相反</h2>
+<p>真实踩坑（项目 B）：参照已有的冻结实现写了新的冻结机制，字段名、方法名、结构几乎一一对应，但漏掉了唯一实质差异——<strong>时间戳在什么时刻被求值</strong>。</p>
+<pre><code class="language-java">// 参考实现：时间戳在「读」的时候求值
+public static boolean isFrozen() {
+    return pendingUuid != null &amp;&amp; Util.getMillis() &lt; freezeUntilMillis;
+}
+</code></pre>
+<pre><code class="language-java">// 自己的实现：时间戳在「写」的时候求值（在 tickServer 里）
+Long deadline = DEADLINE.get(id);
+if (deadline == null || now &lt; deadline) continue;
+resolveTimeout(player, killerId);   // ← 顺手把 WAITING 里的条目 remove 了
+</code></pre>
+<p>后果链：</p>
+<pre><code>tickServer 不跑 → WAITING 永不为空 → blocksWorldTick() 恒 true → 世界永久冻结
+</code></pre>
+<p>而参考实现在同样条件下照样解冻，因为<strong>没有任何驱动者</strong>，也就没有「驱动停摆」这回事。</p>
+<p>两段代码字段名一样、方法名一样、连注释都可能一样。<strong>差异不在字面上</strong>，所以「照着参考写」这句话在字面上无法约束它。</p>
+<blockquote>
+<p>本例取自用户提供的代码片段与结论；本机未定位到 <code>我方实现</code> 源文件（<code>D:\项目 Bmod</code> 下 grep 无命中），此处只按片段语义分析，不主张对文件内容的其它推断。</p>
+</blockquote>
+<h2>一、复位者判据（本方法的核心）</h2>
+<p>对<strong>每一个可变状态</strong>问一句：<strong>谁负责把它复位？</strong></p>
+<p>答案只有三种，风险截然不同：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">复位者</th>
+<th style="text-align: left;">性质</th>
+<th style="text-align: left;">风险</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>读时按时间戳 / 条件算出来</strong></td>
+<td style="text-align: left;">惰性、自愈</td>
+<td style="text-align: left;">无。没有驱动者，就没有驱动停摆</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>定时器 / tick / 事件处理器</strong></td>
+<td style="text-align: left;">急切</td>
+<td style="text-align: left;">驱动一停 → 永久卡死</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>永不复位</strong>（只增不减）</td>
+<td style="text-align: left;">泄漏</td>
+<td style="text-align: left;">迟早出事</td>
+</tr>
+</tbody>
+</table>
+<p>上例：<code>isFrozen()</code> 属于第一类（读时算），<code>WAITING</code> 集合属于第二类（靠 <code>tickServer</code> 主动 remove）。<strong>结构一样，复位者不同，语义就相反。</strong></p>
+<h3>可执行的判别问题</h3>
+<blockquote>
+<p><strong>把这个驱动整个注释掉，这个性质还成立吗？</strong></p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">实现</th>
+<th style="text-align: left;">注释掉 tickServer 后</th>
+<th style="text-align: left;">判定</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">参考实现</td>
+<td style="text-align: left;">照样解冻</td>
+<td style="text-align: left;">自愈，安全</td>
+</tr>
+<tr>
+<td style="text-align: left;">我方实现</td>
+<td style="text-align: left;">永久冻结</td>
+<td style="text-align: left;">驱动依赖，必须显式设计</td>
+</tr>
+</tbody>
+</table>
+<p>这个问题不需要读完整个文件，问一句就能把两类分开。它是<a href="heihe.html">黑盒行为的归因与验证</a> §四 判别实验的一个具体形态——「找一个两类机制预测不同的观察」，这里那个观察就是<strong>不跑驱动</strong>。</p>
+<h2>二、契约表（写第一行实现代码前填完）</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">#</th>
+<th style="text-align: left;">项</th>
+<th style="text-align: left;">参考实现</th>
+<th style="text-align: left;">我的实现</th>
+<th style="text-align: left;">有意差异？</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">1</td>
+<td style="text-align: left;">可变状态清单</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;">2</td>
+<td style="text-align: left;">每个状态的<strong>复位者</strong>（读时 / 驱动 / 永不）</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;">3</td>
+<td style="text-align: left;">参考实现<strong>保证的性质</strong>，写成「即使 X 不发生，Y 仍成立」</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;">4</td>
+<td style="text-align: left;"><strong>判据位置</strong>：准入判断读的是哪个字段 / 哪个方法</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;">5</td>
+<td style="text-align: left;">幂等性与可重入性（同一输入来两次会怎样）</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;">6</td>
+<td style="text-align: left;">最坏情况（参考实现被逼到极限时的行为）</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+</tbody>
+</table>
+<p>三条使用规则：</p>
+<ol>
+<li><strong>「有意差异」列只许填「有意」或「未察觉」，不许填「无差异」。</strong> 填「无差异」说明没找——一定存在差异，因为你的场景不同。</li>
+<li><strong>任何一行填不出来 → 停下来问 / 去读源码，不要边写边补。</strong> 边写边补的表一定是照着实现倒推的，等于没做。</li>
+<li><strong>第 3 行的写法是硬约束</strong>：必须是可判定的断言，不能是「它会正常工作」这类描述。「即使 X 不发生，Y 仍成立」这个句式会强迫你说出依赖关系。</li>
+</ol>
+<blockquote>
+<p>上表是<strong>最小版</strong>（6 行，只覆盖状态与生命周期）。实际动手时用可打勾的完整版：<a href="badu.html">参考契约八维度清单</a>（8 个跨语言恒真维度，含反向验证法与「踩新坑加一行」的维护规则）。</p>
+</blockquote>
+<h2>三、性质先落成测试，再写实现</h2>
+<p>这是唯一能把契约钉死的机制：<strong>文字描述会被忽略，测试不会。</strong></p>
+<pre><code class="language-java">// 不跑任何 tick，只推进时钟，然后断言已解冻
+assertFalse(isFrozenAt(now + FREEZE_MS + 1));
+</code></pre>
+<p>规则：</p>
+<ul>
+<li>第 3 行的每条性质 → 一条可执行断言。</li>
+<li><strong>至少一条必须让驱动循环完全不跑</strong>（否则测不出复位者类别）。</li>
+<li>顺序必须是「先写参考实现的性质测试 → 再写自己的实现」。实现完再补测试，人会照着实现写，测试退化成同义反复。</li>
+<li>测试名里带上性质，不要叫 <code>testFreeze()</code>，要叫 <code>freeze_expiresWithoutTick()</code>。</li>
+</ul>
+<h2>四、自有代码与他人代码：两种不同陷阱</h2>
+<p>用户明确区分过这两类参考源，对策不同：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">参考源</th>
+<th style="text-align: left;">陷阱</th>
+<th style="text-align: left;">对策</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>我们自己的代码</strong></td>
+<td style="text-align: left;"><strong>假熟悉</strong>：「我写的，我知道它干什么」→ 跳过重读，凭记忆抄</td>
+<td style="text-align: left;">必须重新打开实际文件；优先查「上次为什么改过这里」（git log / <code>docs/已验证结论.md</code>），改过的位置往往就是当年的坑</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>他人的代码</strong></td>
+<td style="text-align: left;"><strong>结构匹配</strong>：照形状抄，不懂它的边界条件</td>
+<td style="text-align: left;">必须先回答「它靠什么保证行为」，再动笔；它的命名与注释是<strong>线索不是事实</strong>（同 <code>1.18.2 Forge API 事实速查</code> §九「不凭方法名推测行为」）</td>
+</tr>
+</tbody>
+</table>
+<p>自有代码这一行尤其反直觉：<strong>越熟越容易漏</strong>，因为熟悉感替代了阅读。上例正是自有代码之间的参照。</p>
+<h2>五、反模式</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">反模式</th>
+<th style="text-align: left;">为什么没用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">「你仔细一点 / 认真读参考代码」</td>
+<td style="text-align: left;">这是要求不是机制，没有可执行内容，也没法检查是否做到</td>
+</tr>
+<tr>
+<td style="text-align: left;">给参考代码加更多注释</td>
+<td style="text-align: left;">注释写的是「这段在干什么」，而漏掉的是「性质靠什么成立」——两回事</td>
+</tr>
+<tr>
+<td style="text-align: left;">把参考代码全文贴进去当模板</td>
+<td style="text-align: left;">贴得越多越容易被当模板，结构相似度反而变成干扰项</td>
+</tr>
+<tr>
+<td style="text-align: left;">实现完再补测试</td>
+<td style="text-align: left;">补出来的测试照着实现写，测不出漏点</td>
+</tr>
+<tr>
+<td style="text-align: left;">把「结构相同」当「语义相同」</td>
+<td style="text-align: left;">上例就是结构相同、语义相反的完整反例</td>
+</tr>
+<tr>
+<td style="text-align: left;">差异清单里写「无差异」</td>
+<td style="text-align: left;">说明根本没找；必须写「有意」或「未察觉」</td>
+</tr>
+</tbody>
+</table>
+<h2>六、一页速查</h2>
+<pre><code>1. 复位者     每个可变状态谁复位？读时算 / 驱动推 / 永不
+2. 最坏情况   把驱动整个删掉，性质还成立吗？不成立 → 驱动依赖，必须显式设计
+3. 契约表     性质写成「即使 X 不发生，Y 仍成立」；差异必须标「有意 / 未察觉」
+4. 先测试     一条「驱动完全不跑也成立」的断言，写在实现之前
+5. 交付       差异清单随代码一起留下，不要只活在对话里
+</code></pre>
+<h2>相关笔记</h2>
+<ul>
+<li><code>00-排障方法论索引</code> — 本域入口</li>
+<li><a href="heihe.html">黑盒行为的归因与验证</a> — 同一族方法的「事后定位」方向；判别实验的通式在这里</li>
+<li><code>上游渠道校验排障</code> — 判别实验的完整实战实例</li>
+<li><code>1.18.2 Forge API 事实速查</code> — 「不凭方法名推测行为」的事实依据</li>
+</ul><div class="backlink"><a href="../notes.html">← 返回方法论列表</a></div></div></article>
+<footer><div class="wrap">本站只公开方法论与自建工具；第三方项目细节不在公开范围。<br>刘耀阳 · 337186519@qq.com</div></footer>
+</body>
+</html>

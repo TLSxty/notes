@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>黑盒行为的归因与验证 · 刘耀阳</title>
+<meta name="description" content="刘耀阳 · 排障方法论：把故障定位、参考实现契约提取沉淀成可复用的方法">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="bar"><div class="wrap"><a class="brand" href="../index.html" style="border:none">刘耀阳 · 工程笔记</a><nav><a href="../index.html">首页</a><a href="../notes.html">方法论</a></nav></div></header>
+<article><div class="wrap"><h1>黑盒行为的归因与验证</h1><div class="meta">出事之后怎么定位：从可重放样本到判别实验　·　方法论 · 公开版</div><blockquote>
+<p>一句话：<strong>先让失败可重放，再一次只动一个维度地逼问，最后用「竞争解释预测相反」的判别实验定案。</strong></p>
+<p>本文只写<strong>方法</strong>。具体某次排障的结论写在该问题的专题笔记里（如 <code>上游渠道校验排障</code>），
+因为结论有时效性，方法没有。</p>
+</blockquote>
+<h2>零、证据分级（先声明，再动笔）</h2>
+<p>任何一份排障记录，开头就该把证据分成三档，读者才知道哪句能信到什么程度：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">档</th>
+<th style="text-align: left;">含义</th>
+<th style="text-align: left;">判据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>A · 已确证</strong></td>
+<td style="text-align: left;">可复现的对照实验结果</td>
+<td style="text-align: left;">有脚本、有输入、有输出，别人重跑能得同样结果</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>B · 机制已确证</strong></td>
+<td style="text-align: left;">读过实现层（字节码 / 源码 / 日志）而非靠名字猜</td>
+<td style="text-align: left;">能指出具体方法、具体字段、具体日志行</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>C · 未确证</strong></td>
+<td style="text-align: left;">只是候选解释</td>
+<td style="text-align: left;"><strong>必须标出来，并给出判别实验设计</strong></td>
+</tr>
+</tbody>
+</table>
+<p>C 档不是耻辱，隐瞒 C 档才是。<strong>在 C 档没升级到 A/B 之前不要改代码</strong> —— 改错方向的代价远高于多跑一轮实验。
+<code>D:\项目 Bmod\docs\YSM渲染破坏问题分析.md</code> 是这个写法的完整实例：它 §五 留了四条候选机制全部标为未确证，
+正因为没定案，所以没有直接动代码。</p>
+<h2>一、前提：先把失败变成可重放的样本</h2>
+<p>没有稳定复现，后面所有方法都无从谈起。三件事：</p>
+<ol>
+<li><strong>留存失败输入本身</strong>，不只是留「失败了」这个事实。落盘原始请求体 / 原始日志 / 原始崩溃栈。</li>
+<li><strong>永不自动清理失败样本</strong>。成功样本可以只留最近 N 份，失败样本一份都不能丢。</li>
+<li><strong>建一条绕过主程序的直连重放通道</strong>（直连上游 API、直接调那个方法、直接 <code>javap</code> 那个类），
+   让你能任意变形输入再发一次。</li>
+</ol>
+<blockquote>
+<p>反面实例（真踩过）：早期把请求体落在「只保留 20 份」的滚动目录里，失败体被后续成功请求冲掉，
+无法重放，只能改用「把失败内容拼成 user 消息」的替代实验 —— 这一拼同时引入了双空格和 role 变化
+<strong>两个额外变量</strong>，于是得出了完全错误的结论，并且这个错结论又活了 6 天。
+修复方式：失败体单独落 <code>rejected/</code> 目录，<strong>永不清理</strong>。</p>
+</blockquote>
+<p><strong>判据</strong>：能不能用一条命令，把「昨天那次失败」原样再打一次并且再失败一次？不能，就先修这个。</p>
+<h2>二、分维排除：先砍掉大面</h2>
+<p>拿到可重放样本后，不要急着读内容。先按「输入被切成哪几个正交维度」逐个排除：</p>
+<pre><code>header / 传输参数 / 体积与结构 / 内容本体 / 环境（凭证、域名、版本）
+</code></pre>
+<p>每次<strong>只动一个维度</strong>，其余保持原样。</p>
+<ul>
+<li>一整轮 header 对照（补官方头、去自定义头、换 UA）全放行 → header 维度出局，不用再想。</li>
+<li>参数维度（<code>max_tokens</code>、<code>reasoning_effort</code>、<code>prompt_cache_key</code>、<code>stream_options</code>）逐个删改仍失败 → 出局。</li>
+<li>体积维度（截断消息数、删光 tools）仍失败 → 出局。</li>
+<li>最后只剩「内容本体」，而且<strong>只有把整个内容换成一个极简替身才通过</strong> —— 这就把范围锁死在内容里了。</li>
+</ul>
+<blockquote>
+<p>这一步的价值不在找到原因，而在<strong>写出「已排除」清单</strong>。清单本身能阻止下一个人（或压缩后的自己）
+重走一遍同样的弯路。专题笔记里应该有一节专门叫「已排除的维度」。</p>
+</blockquote>
+<h2>三、二分：从整块缩到一串字符</h2>
+<p>范围锁进内容后，用二分把定位粒度一级级压下去。典型三级：</p>
+<ol>
+<li><strong>块级二分</strong>：内容截前 N 行/前 N 条，找「通过 / 不通过」的分界。O(log n) 次请求。</li>
+<li><strong>句级二分</strong>：把分界那一行按句子拆开，逐句、逐前缀组合测。
+   常见结果是<strong>需要两句共现</strong>才触发 —— 单句都放行。</li>
+<li><strong>词级 / 字符级</strong>：在触发区间内做最小改动，确认锚点到底卡在哪几个字符上。</li>
+</ol>
+<blockquote>
+<p><strong>关键技巧：先解除旧假设的掩蔽。</strong>
+第二次排同一个问题时，旧补丁已经把「上次那个触发点」改掉了，于是新触发点被它盖住：
+直接二分会在旧位置附近反复横跳。正确做法是<strong>先手工把旧补丁的改动还原/绕过，再做二分</strong>。
+实例：10-27 那轮把第 35 行整行删掉之后再做前缀二分，分界才从「34/35」跳到「4/5」，
+新的触发点才暴露出来。</p>
+</blockquote>
+<h2>四、判别实验：区分「字面匹配」与「语义判断」</h2>
+<p>这是整套方法里最值钱的一步。二分只能告诉你「哪里敏感」，判别实验才能告诉你「对方是怎么判的」。</p>
+<p><strong>通式</strong>：要证明机制 M，必须找一个「M 预测会变、而竞争解释预测不变」的观察。</p>
+<p>两种竞争解释的对照设计：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">想区分</th>
+<th style="text-align: left;">实验 A（M 预测变）</th>
+<th style="text-align: left;">实验 B（竞争解释预测不变）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">字面连续匹配 vs 语义近似匹配</td>
+<td style="text-align: left;">在锚定区间内<strong>改空白/插字符</strong> → 若变，说明是字面</td>
+<td style="text-align: left;">在锚定区间<strong>外</strong>改实词 → 若<strong>不变</strong>，说明不看语义</td>
+</tr>
+<tr>
+<td style="text-align: left;">单点触发 vs 两句共现</td>
+<td style="text-align: left;">只放句 0</td>
+<td style="text-align: left;">只放句 1</td>
+</tr>
+<tr>
+<td style="text-align: left;">位置敏感 vs 全文敏感</td>
+<td style="text-align: left;">换顺序</td>
+<td style="text-align: left;">移到别处</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>反面实例（真踩过）：第一轮只测了「改实词 → 通过」，就断言「网关在归一化空间做近似匹配」。
+这个结论能解释当时全部数据，但它是<strong>过度概括</strong> —— 少做实验 B。
+补上实验 B 后（把锚定区间<strong>外</strong>的一个 <code>or</code> 改成 <code>and</code>）结果<strong>仍然失败</strong>，
+于是「字面连续匹配」这个更简单的解释胜出，前面那个复杂假设被推翻。</p>
+<p>教训一句话：<strong>「改 A 有效」不等于「A 的语义被理解了」。</strong> 必须再测一个「不该有效却有效」的对照。</p>
+</blockquote>
+<h2>五、修法取舍：优先不改变语义的表征层改动</h2>
+<p>定位到锚定串之后，能绕过去的方法往往有一堆。选哪个？</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">优先级</th>
+<th style="text-align: left;">类型</th>
+<th style="text-align: left;">例</th>
+<th style="text-align: left;">理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">高</td>
+<td style="text-align: left;"><strong>表征层</strong>：空白、换行、分隔符、零宽字符</td>
+<td style="text-align: left;">句号后换行；句间空格 → 换行</td>
+<td style="text-align: left;">物理切断锚定串，<strong>确定性生效</strong>；且不改变提示语义</td>
+</tr>
+<tr>
+<td style="text-align: left;">中</td>
+<td style="text-align: left;">局部措辞替换</td>
+<td style="text-align: left;"><code>Web GUI</code> → <code>web interface</code></td>
+<td style="text-align: left;">能否绕过取决于锚定串有没有被碰到，<strong>概率性生效</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">低</td>
+<td style="text-align: left;">整段删除</td>
+<td style="text-align: left;">删掉整段运行时提示</td>
+<td style="text-align: left;">生效但丢信息，且上游改措辞后会再犯</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>反面实例：同一轮里 <code>or</code>→<code>and</code>（措辞层）<strong>没绕过</strong>，而改空白（表征层）<strong>全部绕过</strong>。
+措辞改动看起来更「干净」，实际不可靠。</p>
+</blockquote>
+<p>表征层改动必须<strong>可度量</strong>，否则你不知道自己改了多少东西：</p>
+<pre><code>原内容: 17104 字 / 106 行
+改写后: 17104 字 / 193 行
+非空白字符完全一致: true     幂等: true
+替换命中数: 87
+</code></pre>
+<p>三条硬指标：<strong>非空白字符零变化</strong>（语义不变）、<strong>幂等</strong>（跑两次等于跑一次）、<strong>命中数可数</strong>（改动范围可审计）。</p>
+<h2>六、结论必须自带失效判据</h2>
+<p>如果结论依赖「对方现在的行为」，它一定会过期。过期不可怕，<strong>不知道它过期了才可怕</strong>。</p>
+<p>每篇这类笔记的 frontmatter 必须有两个字段：</p>
+<ul>
+<li><code>verify-script:</code> —— 一条命令，重跑就能验证结论是否仍成立。</li>
+<li><code>recall-trigger:</code> —— 什么现象出现时应该回来重跑它。</li>
+</ul>
+<p><strong>验证脚本要验「在用的那份代码」，不要验复制品。</strong> 做法：从真实源文件里按大括号切出函数、
+拼成临时模块执行，再对真实端点打一次。这样补丁被改坏、被回退、被升级覆盖，脚本都会报出来。</p>
+<p>判据要写成「<strong>基准值应该是什么</strong>」，例如「未打补丁时这一行应当是 400」——
+如果某天它变成 200，说明规则已变，补丁可以删。<strong>验证通过 ≠ 结论仍有效</strong>，
+要验证的是「结论的前提仍成立」。</p>
+<h2>七、反模式清单（都是真踩过的）</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">反模式</th>
+<th style="text-align: left;">现场</th>
+<th style="text-align: left;">正确做法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>差异当原因</strong></td>
+<td style="text-align: left;">把「失败侧与正常侧只有第 3 行不同」当根因，实际那是两侧本来就跑不同模型</td>
+<td style="text-align: left;">差异只是线索；要证明它，得改掉它看是否恢复</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>只测「改 A 有效」</strong></td>
+<td style="text-align: left;">据此断言机制，6 天后被推翻</td>
+<td style="text-align: left;">补一个「不该有效却有效」的对照</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>样本留存太少</strong></td>
+<td style="text-align: left;">失败体被滚动冲掉，无法重放</td>
+<td style="text-align: left;">失败样本永不清理</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>拼装体做实验</strong></td>
+<td style="text-align: left;">拼成 user 消息，引入双空格 + role 两个变量</td>
+<td style="text-align: left;">只在原始样本上做单变量变形</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>凭名字推行为</strong></td>
+<td style="text-align: left;">「从类名反推行为」是 MC 侧两处错误的共同成因（应力网络、旋转表示）</td>
+<td style="text-align: left;">反编译 / <code>javap -c</code> 核实之前，类名与字段名只能当线索</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>信崩溃报告的 Suspected Mods</strong></td>
+<td style="text-align: left;">Mixin 失败是<strong>惰性</strong>的，首次触碰目标类才炸，报错指向无关模组</td>
+<td style="text-align: left;">在 <code>latest.log</code> 里搜 <code>Mixin apply failed</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>只测一层就下结论</strong></td>
+<td style="text-align: left;">「槽位搬运无类型校验」成立但「槽位 <code>mayPlace</code> 有判据」不成立</td>
+<td style="text-align: left;">同一系统的不同层次判据不同，<strong>每层分别验证</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>凭先验推测缺陷</strong></td>
+<td style="text-align: left;">曾误报 4 处坐标颠倒，逐行对照后证实并不存在</td>
+<td style="text-align: left;">坐标/公式类结论必须 grep 或逐行对照源码</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>把未触发的隐患当根因</strong></td>
+<td style="text-align: left;">某处缺 <code>try/finally</code> 是真实字节码事实，但本次并未触发</td>
+<td style="text-align: left;">明确写「本次未触发，不是根因」</td>
+</tr>
+</tbody>
+</table>
+<h2>八、MC 侧的同类结论（可直接引用）</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">结论</th>
+<th style="text-align: left;">出处</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>写代码前先 <code>javap -c</code> 读字节码，不凭方法名推测行为</strong> —— 本篇所有反直觉结论都来自字节码，且几乎每条都与第一直觉相反</td>
+<td style="text-align: left;"><code>1.18.2 Forge API 事实速查</code> §九</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>「放行」与「生效」是两件事</strong>：让某机制接受你的对象，与让你的机制真正跑起来，往往由完全不同的判据控制</td>
+<td style="text-align: left;"><code>1.18.2 Forge API 事实速查</code> §九</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>「进不进 <code>hurt</code>」和「能不能改血」是两件独立的事</strong>：返回值只说明对方开不开门，<code>setHealth</code> 是绕开门的另一条通道</td>
+<td style="text-align: left;"><code>1.18.2 伤害管线与真伤实现</code> §五</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>判据只看「谁写了它」，不看语义</strong>：凡「以某字段为唯一准入判据」的设计，都要查清谁写这个字段</td>
+<td style="text-align: left;"><code>项目 C 接入记录</code> §六</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>静态分析 + 实测双确认，缺一不可</strong>（字节码锁定 + 实机 setblock 对比）</td>
+<td style="text-align: left;"><code>跨版本移植记录</code> §8.1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>本体数据不可尽信</strong>：官方配好是假设，不是事实</td>
+<td style="text-align: left;"><code>跨版本移植记录</code> §8.1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>逐 jar 读 <code>.class</code> 常量池字符串匹配 SRG 名</strong>，比读文档可靠；且必须用整合包<strong>实跑目录</strong>而非项目 <code>run/mods</code></td>
+<td style="text-align: left;"><code>第三方模组事实梳理</code> §五</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Mixin 失败是惰性的</strong>，判据在 <code>latest.log</code> 而非崩溃报告</td>
+<td style="text-align: left;"><code>Mixin实战约束</code> §三</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>注入原版统一入口 &gt; 逐个模组打补丁</strong></td>
+<td style="text-align: left;"><code>MC1.18.2通用技术总结</code> §十三</td>
+</tr>
+</tbody>
+</table>
+<h2>九、一页速查</h2>
+<pre><code>1. 可重放？     不能 → 先落盘失败样本 + 建直连通道（永不清理失败样本）
+2. 砍大面       按 header / 参数 / 体积 / 内容逐维排除，一次只动一维 → 写「已排除」清单
+3. 二分         块级 → 句级 → 词级；先解除旧补丁的掩蔽再二分
+4. 判别实验     找一个「我的解释预测会变、竞争解释预测不变」的观察 → 才能定案
+5. 修法         优先表征层（空白/分隔符），它确定性生效且不改语义；措辞替换是概率性的
+6. 度量         非空白字符零变化 + 幂等 + 命中数可数
+7. 交付         带 verify-script + recall-trigger；验证的是「前提仍成立」，不是「曾经修好过」
+</code></pre>
+<h2>相关笔记</h2>
+<ul>
+<li><code>00-排障方法论索引</code> — 本域入口</li>
+<li><code>上游渠道校验排障</code> — 本文方法在网关校验上的完整实例（含 8 轮实验记录）</li>
+<li><code>1.18.2 Forge API 事实速查</code> — MC 侧「读字节码再动手」的事实依据</li>
+<li><code>Mixin实战约束</code> — 惰性失败与判据位置</li>
+<li><code>第三方模组事实梳理</code> — 静态扫描定锚点的方法</li>
+<li><code>跨版本移植记录</code> — 静态分析 + 实测双确认的实例</li>
+<li><code>项目 C 接入记录</code> — 「判据只看谁写了它」与分层验证</li>
+</ul><div class="backlink"><a href="../notes.html">← 返回方法论列表</a></div></div></article>
+<footer><div class="wrap">本站只公开方法论与自建工具；第三方项目细节不在公开范围。<br>刘耀阳 · 337186519@qq.com</div></footer>
+</body>
+</html>
